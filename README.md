@@ -3,8 +3,9 @@
 * [1. Introducción](#1-introducción)
 * [2. Requisitos previos](#2-requisitos-previos)
 * [3. Despliegue](#3-despliegue)
-* [4. Subirlo al servidor web](#4-subirlo-al-servidor-web)
-* [5. Configurar la URL de notificacion al final del pago](#5--configurar-la-url-de-notificaci%C3%B3n-al-final-del-pago)
+* [4. Datos de conexión](#4-datos-de-conexión)
+* [5. Subirlo al servidor web](#4-subirlo-al-servidor-web)
+* [6. Configurar la URL de notificacion al final del pago](#5--configurar-la-url-de-notificaci%C3%B3n-al-final-del-pago)
 ## 1. Introducción
 En este manual podrás encontrar una guía paso a paso para configurar un servidor de **[Java]** para generar un link de redirección. Te proporcionaremos instrucciones detalladas y credenciales de prueba para la instalación y configuración del proyecto, permitiéndote trabajar y experimentar de manera segura en tu propio entorno local.
 Este manual está diseñado para ayudarte a comprender el flujo de la integración de la pasarela para ayudarte a aprovechar al máximo tu proyecto y facilitar tu experiencia de desarrollo.
@@ -66,7 +67,16 @@ mvn package
 java -jar inApp-server-1.1-jar-with-dependencies.jar
 ```
 
-## 4. Subirlo al servidor web
+## 4. Datos de conexión 
+
+**Nota**: Reemplace los datos con sus credenciales de `API formulario V1, V2 y WP SOAP` extraídas desde el Back Office Vendedor, ver [Requisitos Previos](#Requisitos_Previos).
+
+* Editar en `src/resources/app-configuration.properties` :
+<p align="center">
+  <img src="https://i.postimg.cc/g2yZgCVD/Credentials-Java.png" alt="Credentials"/>
+</p>
+
+## 5. Subirlo al servidor web
 
 Para este ejemplo se utilizó reenvío de puertos en Visual Studio Code, siga los siguientes pasos.
 
@@ -79,7 +89,7 @@ Para este ejemplo se utilizó reenvío de puertos en Visual Studio Code, siga lo
   <img src="https://i.postimg.cc/mD907rsV/visual.png" />
 </p>
 
-## 5. Probar el servidor desde POSTMAN
+## 6. Probar el servidor desde POSTMAN
 
 * Colocar la URL con el metodo POST y enviar la consulta.
   
