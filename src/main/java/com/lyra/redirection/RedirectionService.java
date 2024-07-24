@@ -149,6 +149,8 @@ public class RedirectionService {
         }
 
         formParameters.add(new BasicNameValuePair("vads_payment_config", "SINGLE"));
+        formParameters.add(new BasicNameValuePair("vads_redirect_success_timeout", "5"));
+        formParameters.add(new BasicNameValuePair("vads_return_mode", "GET"));
         formParameters.add(new BasicNameValuePair("vads_site_id", merchantSiteId));
 
         /*
@@ -156,7 +158,6 @@ public class RedirectionService {
             This mode does not show extra logos and language item,
             reducing the loading time drastically in high latency cases
          */
-        formParameters.add(new BasicNameValuePair("vads_theme_config", "SIMPLIFIED_DISPLAY=true"));
 
         formParameters.add(new BasicNameValuePair("vads_trans_date", calculateDateFormatInUTC("yyyyMMddHHmmss")));
         formParameters.add(new BasicNameValuePair("vads_trans_id", String.format("%06d", transactionId)));
