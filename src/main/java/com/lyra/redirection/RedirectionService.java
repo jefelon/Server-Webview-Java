@@ -32,36 +32,21 @@ import java.util.*;
  * @author Lyra Network
  */
 public class RedirectionService {
-    /**
-     * This method creates a form and post it into the payment platform in order to generate the payment URL<p></p>
-     *
-     * @param email customer email
-     * @param amount amount of payment in cents
-     * @param currency the used currency in ISO 4217. Ex: 978
-     * @param mode the used mode of payment: TEST or PRODUCTION
-     * @param language the language used to perform the payment. Ex: EN
-     * @param cardType the card type. Ex: VISA
-     * @param configurationSet configuration name. If null, the default one will be taken
-     * @return The generated URL, ready to be browsed in the Webview
-     */
-    public String initPayment(String email, String amount, String currency, String mode, String language, String cardType, String orderId, String configurationSet) {
+
+    public String initPayment(String email, String amount, String currency, String mode, String language, String cardType, String orderId, String configurationSet, boolean isSubscription) {
         String redirectionUrl = null;
         
-        //Read configuration
+        // Read configuration
         Map<String, String> configuration = ServerConfiguration.getConfiguration(mode);
 
-        //Create HTTP client
+        // Create HTTP client
         CloseableHttpClient client = createHttpClient(configuration);
-
-        //Prepare the post object to perform post
-        String url = String.format("%s/vads-payment/entry.silentInit.a", configuration.get("paymentPlatformUrl"));
         
-        HttpPost post = new HttpPost(String.format("%s/vads-payment/entry.silentInit.a",
-                configuration.get("paymentPlatformUrl")));
+        HttpPost post = new HttpPost(String.format("%s/vads-payment/entry.silentInit.a", configuration.get("paymentPlatformUrl")));
 
-        //Create form to send to payment platform
+        // Create form to send to payment platform
         Integer transactionId = TransactionIdGenerator.generateNewTransactionId();
-        List<NameValuePair> formParameters = createFormParameters(transactionId, email, amount, currency, mode, language, cardType, orderId, configuration);
+        List<NameValuePair> formParameters = createFormParameters(transactionId, email, amount, currency, mode, language, cardType, orderId, configuration, isSubscription);
 
         try {
             post.setEntity(new UrlEncodedFormEntity(formParameters, "UTF-8"));
@@ -69,39 +54,29 @@ public class RedirectionService {
             throw new RuntimeException("Error in payment initialization", uee);
         }
 
-        //Perform the HTTP call to payment platform
+        // Perform the HTTP call to payment platform
         try (CloseableHttpResponse httpResponse = client.execute(post)) {
             HttpEntity entity = httpResponse.getEntity();
-
-            // Get response code
             int httpResponseCode = httpResponse.getStatusLine().getStatusCode();
-            // Get all response data
             Map<String, String> responseData = new Gson().fromJson(EntityUtils.toString(entity, "UTF-8"), Map.class);
-
-            //If the HTTP return code is 200 (OK) we prepare the generated URL
+            
             if (httpResponseCode == 200) {
                 if ("INITIALIZED".equals(responseData.get("status"))) {
                     redirectionUrl = responseData.get("redirect_url");
                 } else {
-                    //Payment could  not be created. Maybe a missing parameter, an invalid value or signature?
-                    //Use logs here in order to detect and fix the real cause
                     throw new RuntimeException("Error in payment initialization. Returned error: " + responseData.get("error"));
                 }
             } else {
-                throw new RuntimeException("Error in payment initialization. HTTP errorCode: " + httpResponse);
+                throw new RuntimeException("Error in payment initialization. HTTP errorCode: " + httpResponseCode);
             }
         } catch (IOException ex) {
             throw new RuntimeException("Error in payment initialization", ex);
         }
 
-        //Return the generated URL
         return redirectionUrl;
     }
 
-    /*
-    * Create the HTTP client with timeout configuration of 20 seconds
-     */
-    private static CloseableHttpClient createHttpClient (Map<String, String> configuration) {
+    private static CloseableHttpClient createHttpClient(Map<String, String> configuration) {
         int timeout = Integer.valueOf(configuration.get("httpPostTimeout"));
         RequestConfig config = RequestConfig.custom()
                 .setConnectTimeout(timeout * 1000)
@@ -117,47 +92,34 @@ public class RedirectionService {
         return client;
     }
 
-    /*
-    * Create a list of all parameters that will be sent to payment platform.
-    *
-    * This fields need to be signed using the private key of the target shop
-     */
-    private List<NameValuePair> createFormParameters(Integer transactionId, String email, String amount, String currency, String mode, String language, String cardType, String orderId, Map<String, String> configuration) {    
+    private List<NameValuePair> createFormParameters(Integer transactionId, String email, String amount, String currency, String mode, String language, String cardType, String orderId, Map<String, String> configuration, boolean isSubscription) {    
         String merchantSiteId = configuration.get("merchantSiteId");
         String usedMerchantKey = configuration.get("usedMerchantKey");
 
-        //List that contains the parameters of the form used to create payment
         List<NameValuePair> formParameters = new ArrayList<>();
 
         formParameters.add(new BasicNameValuePair("vads_action_mode", "INTERACTIVE"));
         formParameters.add(new BasicNameValuePair("vads_amount", amount));
         formParameters.add(new BasicNameValuePair("vads_ctx_mode", mode));
         formParameters.add(new BasicNameValuePair("vads_currency", currency));
-        if (StringUtils.isNotEmpty(email)) {
-        	formParameters.add(new BasicNameValuePair("vads_cust_email", email));
-        }
-
+        formParameters.add(new BasicNameValuePair("vads_cust_email", email));
         formParameters.add(new BasicNameValuePair("vads_language", language));
-        if (StringUtils.isNotEmpty(orderId)) {
-            formParameters.add(new BasicNameValuePair("vads_order_id", orderId));
-        }
-        formParameters.add(new BasicNameValuePair("vads_page_action", "PAYMENT"));
-
-        //Set the card type if provided
+        formParameters.add(new BasicNameValuePair("vads_order_id", orderId));
         if (StringUtils.isNotEmpty(cardType)) {
             formParameters.add(new BasicNameValuePair("vads_payment_cards", cardType.toUpperCase()));
         }
-
+        formParameters.add(new BasicNameValuePair("vads_page_action", isSubscription ? "REGISTER_PAY_SUBSCRIBE" : "PAYMENT"));
         formParameters.add(new BasicNameValuePair("vads_payment_config", "SINGLE"));
         formParameters.add(new BasicNameValuePair("vads_redirect_success_timeout", "5"));
         formParameters.add(new BasicNameValuePair("vads_return_mode", "GET"));
         formParameters.add(new BasicNameValuePair("vads_site_id", merchantSiteId));
 
-        /*
-            Set the simplified mode for payment page.
-            This mode does not show extra logos and language item,
-            reducing the loading time drastically in high latency cases
-         */
+        if (isSubscription) {
+            formParameters.add(new BasicNameValuePair("vads_sub_amount", amount));
+            formParameters.add(new BasicNameValuePair("vads_sub_currency", currency));
+            formParameters.add(new BasicNameValuePair("vads_sub_effect_date", calculateDateFormatInUTC("yyyyMMdd")));
+            formParameters.add(new BasicNameValuePair("vads_sub_desc", "RRULE:FREQ=WEEKLY;INTERVAL=2"));
+        }
 
         formParameters.add(new BasicNameValuePair("vads_trans_date", calculateDateFormatInUTC("yyyyMMddHHmmss")));
         formParameters.add(new BasicNameValuePair("vads_trans_id", String.format("%06d", transactionId)));
@@ -170,33 +132,30 @@ public class RedirectionService {
 
         formParameters.add(new BasicNameValuePair("vads_version", "V2"));
 
-        //Create the string to sign
         String concatenateMapParams = "";
         for (NameValuePair pair : formParameters) {
             concatenateMapParams += pair.getValue() + "+";
         }
-        //Add private key in signature
         concatenateMapParams += usedMerchantKey;
 
-        //Add signature to form parameters
         formParameters.add(new BasicNameValuePair("signature", hmacSha256(concatenateMapParams, usedMerchantKey)));
 
         return formParameters;
     }
 
-    /*
-     * Utility method that return current UTC date in an specified format
-     */
     private static String calculateDateFormatInUTC(String format) {
-        Date now = new Date();
+        return calculateDateFormatInUTC(format, 0);
+    }
+    
+    private static String calculateDateFormatInUTC(String format, int monthsToAdd) {
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        calendar.add(Calendar.MONTH, monthsToAdd);
+        Date futureDate = calendar.getTime();
         SimpleDateFormat dateFormatter = new SimpleDateFormat(format);
         dateFormatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-        return dateFormatter.format(now);
-    }
+        return dateFormatter.format(futureDate);
+    }    
 
-    /*
-     * Utility method used to sign the form data using  HMAC-SHA-256 algorithm
-     */
     private static String hmacSha256(String input, String key) {
         Mac hmacSha256;
         byte[] inputBytes;
@@ -217,12 +176,6 @@ public class RedirectionService {
     }
 }
 
-/**
- * Simple implementation of a generator for transactionId (this number must be unique by day)<p></p>
- *
- * Note that this simple implementation does not guarantee an unique transactionId. If you want to perform a
- * stronger implementation you should verify each generation using one storage based system (database, files, etc)
- */
 class TransactionIdGenerator {
     private static int counter = new Random().nextInt(500000);
     private static int maxCounter = 999999;
